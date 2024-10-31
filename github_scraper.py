@@ -1,157 +1,101 @@
-# Install necessary libraries in Colab
-
-pip install pandas
-
 import requests
-import pandas as pd
+import csv
 import os
 
-# Set your GitHub username and token as environment variables for security.
-os.environ['GITHUB_USERNAME'] = 'riya360-arch'
-os.environ['GITHUB_TOKEN'] = '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'
+# GitHub API base URL
+GITHUB_API_BASE_URL = "https://api.github.com"
 
-# GitHub API endpoint
-BASE_URL = "https://api.github.com"
-headers = {
-    "Authorization": f"token {os.environ['GITHUB_TOKEN']}"
-}
-
-# Function to fetch users in Basel with over 10 followers
-def fetch_users(location="Basel", min_followers=10):
-    users_data = []
-    page = 1
-
-    while True:
-        response = requests.get(
-            f"{BASE_URL}/search/users?q=location:{location}+followers:>{min_followers}&page={page}",
-            headers=headers
-        )
-        data = response.json().get('items', [])
-        if not data:
-            break
-        for user in data:
-            user_detail = requests.get(user['url'], headers=headers).json()
-            users_data.append(user_detail)
-        page += 1
-
-    return users_data
+# Function to fetch users based on location and followers
+def fetch_users(location, min_followers):
+    url = f"{GITHUB_API_BASE_URL}/search/users?q=location:{location}+followers:>{min_followers}"
+    headers = {"Authorization": f"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"}  # Replace with your GitHub token
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()  # Raise an error for bad responses
+    return response.json().get("items", [])
 
 # Function to fetch repositories for a given user
-def fetch_repositories(username):
-    repos_data = []
-    page = 1
+def fetch_user_repositories(username):
+    url = f"{GITHUB_API_BASE_URL}/users/{username}/repos"
+    headers = {"Authorization": f"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"}  # Replace with your GitHub token
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()
 
-    while True:
-        response = requests.get(f"{BASE_URL}/users/{username}/repos?per_page=100&page={page}", headers=headers)
-        data = response.json()
-        if not data:
-            break
-        repos_data.extend(data)
-        page += 1
+# Function to clean and process user data
+def clean_company_name(company):
+    return company.lstrip("@").strip().upper() if company else ""
 
-    return repos_data
+def clean_hireable(hireable):
+    return hireable if isinstance(hireable, bool) else ""
 
-# Fetch users and repositories
-users = fetch_users()
-users_list = []
-repos_list = []
+def clean_bio(bio):
+    return bio if bio is not None else ""
 
-# Process users and repositories
-for user in users:
-    # User data for users.csv
-    user_data = {
-        "login": user.get("login", ""),
-        "name": user.get("name", ""),
-        "company": user.get("company", "").strip().lstrip('@').upper() if user.get("company") else "",
-        "location": user.get("location", ""),
-        "email": user.get("email", ""),
-        "hireable": user.get("hireable", ""),
-        "bio": user.get("bio", ""),
-        "public_repos": user.get("public_repos", 0),
-        "followers": user.get("followers", 0),
-        "following": user.get("following", 0),
-        "created_at": user.get("created_at", "")
-    }
-    users_list.append(user_data)
+# Function to save users to CSV
+def save_users_to_csv(users_data):
+    headers = ["login", "name", "company", "location", "email", "hireable", "bio", "public_repos", "followers", "following", "created_at"]
+    with open("users.csv", "w", newline='', encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)  # Write header row
 
-    # Repository data for repositories.csv
-    repositories = fetch_repositories(user.get("login"))
-    for repo in repositories[:500]:  # Limit to 500 repositories
-        repo_data = {
-            "login": user.get("login", ""),
-            "full_name": repo.get("full_name", ""),
-            "created_at": repo.get("created_at", ""),
-            "stargazers_count": repo.get("stargazers_count", 0),
-            "watchers_count": repo.get("watchers_count", 0),
-            "language": repo.get("language", ""),
-            "has_projects": repo.get("has_projects", False),
-            "has_wiki": repo.get("has_wiki", False),
-            "license_name": repo.get("license", {}).get("key", "")
-        }
-        repos_list.append(repo_data)
+        for user in users_data:
+            company = clean_company_name(user.get("company", ""))
+            hireable = clean_hireable(user.get("hireable", None))
+            bio = clean_bio(user.get("bio", None))
+            writer.writerow([
+                user.get("login", ""),
+                user.get("name", ""),
+                company,
+                user.get("location", ""),
+                user.get("email", ""),
+                hireable,
+                bio,
+                user.get("public_repos", 0),
+                user.get("followers", 0),
+                user.get("following", 0),
+                user.get("created_at", "")
+            ])
 
-# Save data to CSV files
-users_df = pd.DataFrame(users_list)
-repos_df = pd.DataFrame(repos_list)
-users_df.to_csv("users.csv", index=False)
-repos_df.to_csv("repositories.csv", index=False)
+# Function to save repositories to CSV
+def save_repositories_to_csv(repos_data):
+    headers = ["login", "full_name", "created_at", "stargazers_count", "watchers_count", "language", "has_projects", "has_wiki", "license_name"]
+    with open("repositories.csv", "w", newline='', encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)  # Write header row
 
-# Create README.md content
-readme_content = """
-# GitHub Basel User Data Analysis
+        for repo in repos_data:
+            # Safely handle the license retrieval
+            license_name = ""
+            if repo.get("license") is not None:
+                license_name = repo["license"].get("key", "")
 
-### Summary
-- **Data Scraping**: Used the GitHub API to scrape users in Basel with over 10 followers and their repositories.
-- **Findings**: The most interesting finding was [insert interesting finding based on analysis].
-- **Recommendation**: For developers looking to increase followers, [insert recommendation].
+            writer.writerow([
+                repo.get("owner", {}).get("login", ""),
+                repo.get("full_name", ""),
+                repo.get("created_at", ""),
+                repo.get("stargazers_count", 0),
+                repo.get("watchers_count", 0),
+                repo.get("language", ""),
+                repo.get("has_projects", False),
+                repo.get("has_wiki", False),
+                license_name
+            ])
 
-### Files
-- **users.csv**: Contains user data for GitHub users in Basel.
-- **repositories.csv**: Contains repository data for the users in users.csv.
 
-### Setup
-1. Clone the repository.
-2. Install necessary packages with `pip install pandas requests`.
-3. Run the analysis script to get insights.
+# Main function to orchestrate the data fetching and saving
+def main():
+    location = "Basel"
+    min_followers = 10
+    users_data = fetch_users(location, min_followers)
 
-### License
-This project is licensed under the MIT License - see the LICENSE file for details.
-"""
+    # Save users data to CSV
+    save_users_to_csv(users_data)
 
-# Save README file
-with open("README.md", "w") as f:
-    f.write(readme_content)
+    # For each user, fetch their repositories
+    for user in users_data:
+        username = user['login']
+        repos_data = fetch_user_repositories(username)
+        save_repositories_to_csv(repos_data)
 
-# GitHub repository setup
-def create_github_repo(repo_name):
-    url = f"{BASE_URL}/user/repos"
-    data = {"name": repo_name, "private": False}
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 201:
-        print("Repository created successfully.")
-        return response.json()["clone_url"]
-    else:
-        print("Failed to create repository:", response.json())
-        return None
-
-# Push files to the repository
-def push_to_github_repo(repo_name):
-    from git import Repo
-    
-    repo_url = create_github_repo(repo_name)
-    if not repo_url:
-        return
-    
-    # Initialize a local Git repository and commit files
-    repo = Repo.init()
-    repo.git.add(all=True)
-    repo.index.commit("Initial commit with users.csv, repositories.csv, and README.md")
-
-    # Set remote and push
-    origin = repo.create_remote('origin', repo_url)
-    origin.push(refspec='main:main')
-    print(f"Pushed to {repo_url}")
-
-# Execute functions to create and push to GitHub repo
-repo_name = "basel-github-users"
-push_to_github_repo(repo_name)
+if __name__ == "__main__":
+    main()
