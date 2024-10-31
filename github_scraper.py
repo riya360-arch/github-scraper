@@ -1,5 +1,5 @@
 # Install necessary libraries in Colab
-pip install requests
+
 pip install pandas
 
 import requests
