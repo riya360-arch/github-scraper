@@ -8,7 +8,7 @@ GITHUB_API_BASE_URL = "https://api.github.com"
 # Function to fetch users based on location and followers
 def fetch_users(location, min_followers):
     url = f"{GITHUB_API_BASE_URL}/search/users?q=location:{location}+followers:>{min_followers}"
-    headers = {"Authorization": f"token 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"}  # Replace with your GitHub token
+    headers = {"Authorization": f"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"}  # Replace with your GitHub token
     response = requests.get(url, headers=headers)
     response.raise_for_status()  # Raise an error for bad responses
     return response.json().get("items", [])
@@ -16,7 +16,7 @@ def fetch_users(location, min_followers):
 # Function to fetch repositories for a given user
 def fetch_user_repositories(username):
     url = f"{GITHUB_API_BASE_URL}/users/{username}/repos"
-    headers = {"Authorization": f"token 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"}  # Replace with your GitHub token
+    headers = {"Authorization": f"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"}  # Replace with your GitHub token
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()
